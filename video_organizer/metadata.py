@@ -1,4 +1,4 @@
-"""Video metadata extraction via ffprobe."""
+"""Extração de metadados de vídeo via ffprobe."""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,7 @@ FFPROBE = shutil.which("ffprobe")
 
 
 class FFProbeNotFoundError(RuntimeError):
-    """Raised when ffprobe is not available on PATH."""
+    """Lançada quando o ffprobe não está disponível no PATH."""
 
 
 @dataclass
@@ -24,11 +24,11 @@ class VideoMetadata:
 
 
 def probe(path: Path) -> VideoMetadata:
-    """Read duration and resolution for a video file using ffprobe."""
+    """Lê duração e resolução de um arquivo de vídeo usando o ffprobe."""
     if FFPROBE is None:
         raise FFProbeNotFoundError(
-            "ffprobe was not found on PATH. Install ffmpeg (https://ffmpeg.org/) and make sure "
-            "ffprobe is available in your terminal, then try again."
+            "ffprobe não foi encontrado no PATH. Instale o ffmpeg (https://ffmpeg.org/) e "
+            "garanta que o ffprobe esteja disponível no seu terminal, depois tente novamente."
         )
 
     cmd = [

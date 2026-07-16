@@ -1,46 +1,55 @@
 # video-organizer
 
-Scans a video library (recursively, from a folder set in `config.yaml`) and helps clean it up in
-two passes:
+Varre uma biblioteca de vídeos (recursivamente, a partir de uma pasta definida no `config.yaml`)
+e ajuda a organizá-la em duas etapas:
 
-1. **Duplicate detection** — groups videos that are byte-identical or *probably* the same clip
-   (similar duration + a matching sampled frame), moves each group into a review folder, and
-   renames the copies based on whichever filename looks most descriptive.
-2. **Short-video detection** — among whatever is left, finds anything under a configured duration
-   and moves it into a separate review folder.
+1. **Detecção de duplicados** — agrupa vídeos que são idênticos byte a byte ou *provavelmente*
+   o mesmo clipe (duração parecida + um frame amostrado correspondente), move cada grupo para
+   uma pasta de revisão e renomeia as cópias com base no nome de arquivo que parece mais
+   descritivo.
+2. **Detecção de vídeos curtos** — entre o que sobrou, encontra tudo que estiver abaixo de uma
+   duração configurada e move para uma pasta de revisão separada.
 
-Every move is shown as a table and requires interactive confirmation before anything touches disk
-(unless `--yes` or `--dry-run` is passed). Files are always **moved**, never copied.
+Toda movimentação é exibida como uma tabela e exige confirmação interativa antes de qualquer
+alteração no disco (a menos que `--yes` ou `--dry-run` seja usado). Os arquivos são sempre
+**movidos**, nunca copiados.
 
-## Requirements
+`source_folder` no `config.yaml` é opcional — se não for informado, a pasta atual (de onde o
+comando for executado) é usada. Antes de começar a varredura, o programa sempre exibe a pasta
+que será usada e um resumo de quais etapas de detecção estão ativas (`duplicates`,
+`short_videos`), e pede confirmação explícita para prosseguir. Essa confirmação inicial acontece
+sempre, mesmo com `--yes` ou `--dry-run` — o `--yes` só pula as confirmações de "mover estes
+arquivos?" mais adiante.
+
+## Requisitos
 
 - Python 3.10+
-- `ffmpeg` / `ffprobe` on PATH — used to read duration/resolution and to sample a frame for
-  near-duplicate matching. Without it, duplicate detection falls back to exact byte-hash matches
-  only, and short-video detection can't run.
+- `ffmpeg` / `ffprobe` no PATH — usados para ler duração/resolução e para amostrar um frame na
+  comparação de prováveis duplicados. Sem isso, a detecção de duplicados funciona apenas por
+  hash exato de bytes, e a detecção de vídeos curtos não funciona.
 
-## Setup
+## Configuração inicial
 
 ```
 pip install -e ".[dev]"
 cp config.example.yaml config.yaml
 ```
 
-Edit `config.yaml` — at minimum set `source_folder`. Everything else (review folder names, the
-duplicate-similarity thresholds, the short-video cutoff) has a sensible default and can be tuned
-later; see the comments in `config.example.yaml`.
+Edite o `config.yaml` — no mínimo, defina `source_folder`. Todo o resto (nomes das pastas de
+revisão, os limites de similaridade de duplicados, o corte de vídeo curto) já tem um valor padrão
+razoável e pode ser ajustado depois; veja os comentários em `config.example.yaml`.
 
-## Usage
+## Uso
 
 ```
 python -m video_organizer.cli --config config.yaml
-python -m video_organizer.cli --config config.yaml --dry-run   # show planned moves only
-python -m video_organizer.cli --config config.yaml --yes       # skip confirmation prompts
+python -m video_organizer.cli --config config.yaml --dry-run   # só mostra o plano, sem mover
+python -m video_organizer.cli --config config.yaml --yes       # pula os prompts de confirmação
 ```
 
-Or, after `pip install -e .`, the `video-organizer` console script is also available.
+Ou, depois de `pip install -e .`, o script de console `video-organizer` também fica disponível.
 
-## Tests
+## Testes
 
 ```
 pytest

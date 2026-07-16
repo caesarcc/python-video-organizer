@@ -1,10 +1,14 @@
-# Video Organizer configuration.
-# Copy this file to config.yaml (gitignored) and edit source_folder for your machine.
+# Configuração do Video Organizer.
+# Copie este arquivo para config.yaml (ignorado pelo git) e edite o source_folder para sua máquina.
 
-# Root folder to scan recursively for videos.
+# Pasta raiz onde os vídeos serão buscados recursivamente.
+# Opcional: se este campo for omitido, a pasta atual (de onde o comando for executado) é usada.
+# De qualquer forma, antes de começar a varredura o programa sempre mostra a pasta que será
+# usada e pede uma confirmação explícita no terminal - inclusive quando --yes ou --dry-run
+# forem passados.
 source_folder: "C:/Users/you/Videos"
 
-# Video file extensions to consider (case-insensitive).
+# Extensões de arquivo consideradas vídeo (não diferencia maiúsculas/minúsculas).
 video_extensions:
   - .mp4
   - .mkv
@@ -15,22 +19,22 @@ video_extensions:
   - .webm
   - .m4v
 
-# --- Duplicate / probable-duplicate detection ---
+# --- Detecção de duplicados / prováveis duplicados ---
 duplicates:
   enabled: true
-  # Folder created inside source_folder to hold groups of (probable) duplicates for manual review.
+  # Pasta criada dentro de source_folder para guardar grupos de (prováveis) duplicados para revisão manual.
   review_folder_name: "_duplicates_review"
-  # Perceptual-hash Hamming distance below which two frames are considered "the same shot".
+  # Distância de Hamming do hash perceptual abaixo da qual dois frames são considerados "a mesma cena".
   hash_distance_threshold: 8
-  # Two videos are only compared for similarity if their durations differ by less than this.
+  # Dois vídeos só são comparados por similaridade se a diferença de duração for menor que isso.
   duration_tolerance_seconds: 2
 
-# --- Short-video detection ---
+# --- Detecção de vídeos curtos ---
 short_videos:
   enabled: true
-  # Folder created inside source_folder to hold clips shorter than max_duration_seconds.
+  # Pasta criada dentro de source_folder para guardar clipes mais curtos que max_duration_seconds.
   review_folder_name: "_short_videos"
   max_duration_seconds: 5
 
-# Ask for confirmation before moving files. Override per-run with --yes / --dry-run.
+# Pede confirmação antes de mover arquivos. Pode ser sobrescrito por execução com --yes / --dry-run.
 confirm_before_move: true

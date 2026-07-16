@@ -1,9 +1,9 @@
-"""Command-line entry point for video-organizer.
+"""Ponto de entrada de linha de comando do video-organizer.
 
 Pipeline:
     scanner.find_videos()
-        -> duplicates.find_duplicate_groups()  -> show/confirm -> mover.execute_moves()
-        -> short_videos.find_short_videos()     -> show/confirm -> mover.execute_moves()
+        -> duplicates.find_duplicate_groups()  -> exibe/confirma -> mover.execute_moves()
+        -> short_videos.find_short_videos()     -> exibe/confirma -> mover.execute_moves()
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 from .config import Config, ConfigError, load_config
 from .duplicates import DuplicateGroup, find_duplicate_groups, pick_reference_name
 from .metadata import FFProbeNotFoundError
-from .mover import MovePlan, confirm, execute_moves, show_plan, unique_destination
+from .mover import MovePlan, confirm, console, execute_moves, show_plan, unique_destination
 from .scanner import find_videos
 from .short_videos import find_short_videos
 
@@ -49,6 +49,24 @@ def build_short_video_plans(config: Config, paths: list[Path]) -> list[MovePlan]
     return plans
 
 
+def confirm_target(config: Config) -> bool:
+    """Mostra a pasta que será varrida e quais etapas de detecção estão ativas, e pede uma
+    confirmação explícita antes de começar. Roda sempre - inclusive com --yes ou --dry-run -
+    porque source_folder pode ter sido inferido silenciosamente a partir da pasta atual."""
+    if config.source_folder_from_default:
+        console.print(
+            f"Source folder: {config.source_folder} "
+            "[dim](source_folder not set in config.yaml - using the current directory)[/dim]"
+        )
+    else:
+        console.print(f"Source folder: {config.source_folder}")
+
+    console.print(f"  duplicates:   {'enabled' if config.duplicates.enabled else 'disabled'}")
+    console.print(f"  short_videos: {'enabled' if config.short_videos.enabled else 'disabled'}")
+
+    return confirm("Proceed with this folder and these settings?")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -57,6 +75,10 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 1
+
+    if not confirm_target(config):
+        print("Aborted.")
+        return 0
 
     skip_dirs = {config.duplicates.review_folder_name, config.short_videos.review_folder_name}
     videos = find_videos(config.source_folder, config.video_extensions, skip_dirs=skip_dirs)

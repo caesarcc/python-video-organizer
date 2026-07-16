@@ -1,8 +1,8 @@
-"""Move planning, confirmation, and execution.
+"""Planejamento, confirmação e execução das movimentações de arquivo.
 
-This is the only module allowed to touch the filesystem for moves. Detection modules
-(duplicates.py, short_videos.py) only ever return data; cli.py turns that data into MovePlans
-and hands them here. Files are always moved (shutil.move), never copied.
+Este é o único módulo autorizado a tocar o sistema de arquivos para mover arquivos. Os módulos
+de detecção (duplicates.py, short_videos.py) só retornam dados; o cli.py transforma esses dados
+em MovePlans e os entrega aqui. Os arquivos são sempre movidos (shutil.move), nunca copiados.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class MovePlan:
 
 
 def unique_destination(destination: Path) -> Path:
-    """Avoid overwriting an existing file by appending a numeric suffix, e.g. 'clip (1).mp4'."""
+    """Evita sobrescrever um arquivo existente, acrescentando um sufixo numérico, ex.: 'clip (1).mp4'."""
     if not destination.exists():
         return destination
     stem, suffix, parent = destination.stem, destination.suffix, destination.parent

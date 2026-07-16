@@ -2,82 +2,92 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project overview
+## Visão geral do projeto
 
-video-organizer is a Python CLI that scans a video library (recursively, from a folder set in
-`config.yaml`) and cleans it up in two passes:
+video-organizer é uma CLI em Python que varre uma biblioteca de vídeos (recursivamente, a partir
+de uma pasta definida no `config.yaml`) e a organiza em duas etapas:
 
-1. **Duplicate detection** — groups videos that are byte-identical (SHA-256) or *probably* the
-   same clip (similar duration + perceptual hash of a sampled frame, via ffmpeg/ffprobe), moves
-   each group into a review folder, and renames the copies based on the filename judged most
-   descriptive (longest stem).
-2. **Short-video detection** — among whatever videos are left, finds anything under a configured
-   duration and moves it into a separate review folder.
+1. **Detecção de duplicados** — agrupa vídeos que são idênticos byte a byte (SHA-256) ou
+   *provavelmente* o mesmo clipe (duração parecida + hash perceptual de um frame amostrado, via
+   ffmpeg/ffprobe), move cada grupo para uma pasta de revisão e renomeia as cópias com base no
+   nome de arquivo julgado mais descritivo (o mais longo).
+2. **Detecção de vídeos curtos** — entre os vídeos restantes, encontra tudo que estiver abaixo de
+   uma duração configurada e move para uma pasta de revisão separada.
 
-Every move is presented as a table and requires interactive confirmation before anything touches
-disk (unless `--yes` or `--dry-run` is passed). Files are always **moved**, never copied.
+Toda movimentação é exibida como uma tabela e exige confirmação interativa antes de qualquer
+alteração no disco (a menos que `--yes` ou `--dry-run` seja usado). Os arquivos são sempre
+**movidos**, nunca copiados.
 
-## Commands
+`source_folder` é opcional no `config.yaml`: se ausente, `Config.source_folder_from_default` fica
+`True` e a pasta atual (`Path.cwd()`) é usada. Por isso, antes de escanear qualquer coisa,
+`cli.py:confirm_target` sempre exibe a pasta resolvida e um resumo de quais etapas de detecção
+estão ativas (`duplicates`, `short_videos`), e pede confirmação explícita — esse gate roda mesmo
+com `--yes` ou `--dry-run` (só o `--yes` posterior, nas confirmações de "mover estes arquivos?",
+é que é ignorado).
 
-Setup:
+## Comandos
+
+Configuração inicial:
 ```
 pip install -e ".[dev]"
 ```
 
-Copy the example config before first run — `config.yaml` is gitignored because it contains a real
-local path:
+Copie o config de exemplo antes da primeira execução — `config.yaml` está no `.gitignore` porque
+contém um caminho local real:
 ```
-cp config.example.yaml config.yaml   # then edit source_folder
+cp config.example.yaml config.yaml   # depois edite source_folder
 ```
 
-Run:
+Executar:
 ```
 python -m video_organizer.cli --config config.yaml
-python -m video_organizer.cli --config config.yaml --dry-run   # show planned moves only
-python -m video_organizer.cli --config config.yaml --yes       # skip confirmation prompts
+python -m video_organizer.cli --config config.yaml --dry-run   # só mostra o plano, sem mover
+python -m video_organizer.cli --config config.yaml --yes       # pula os prompts de confirmação
 ```
 
-Tests:
+Testes:
 ```
 pytest
-pytest tests/test_duplicates.py -k exact_hash   # single test
+pytest tests/test_duplicates.py -k exact_hash   # um teste específico
 ```
 
-Requires `ffmpeg`/`ffprobe` on PATH for metadata extraction and perceptual hashing — without it,
-duplicate detection falls back to exact-hash matches only (see `metadata.FFProbeNotFoundError`),
-and short-video detection can't run at all since it needs duration.
+Requer `ffmpeg`/`ffprobe` no PATH para extração de metadados e hash perceptual — sem isso, a
+detecção de duplicados cai para apenas hash exato (ver `metadata.FFProbeNotFoundError`), e a
+detecção de vídeos curtos não funciona, já que depende da duração.
 
-## Architecture
+## Arquitetura
 
-Pipeline, driven end-to-end from `video_organizer/cli.py:main`:
+Pipeline, orquestrado de ponta a ponta a partir de `video_organizer/cli.py:main`:
 
 ```
-scanner.find_videos()  ->  duplicates.find_duplicate_groups()  ->  mover (show/confirm/execute)
-                       ->  short_videos.find_short_videos()    ->  mover (show/confirm/execute)
+confirm_target()  ->  scanner.find_videos()  ->  duplicates.find_duplicate_groups()  ->  mover (exibe/confirma/executa)
+                                              ->  short_videos.find_short_videos()    ->  mover (exibe/confirma/executa)
 ```
 
-- `config.py` — loads and validates `config.yaml` into a `Config` dataclass. All tunables (source
-  folder, review-folder names, hash distance threshold, duration tolerance, short-video threshold)
-  live here; add new knobs here first.
-- `scanner.py` — recursive file discovery; always excludes the configured review-folder names so
-  re-runs don't re-scan already-sorted output.
-- `metadata.py` — wraps `ffprobe` (JSON output) to get duration/resolution; this is the single
-  point where ffmpeg absence is detected and surfaced (`FFProbeNotFoundError`).
-- `hashing.py` — `sha256_file` for exact-duplicate matching; `perceptual_hash` extracts one frame
-  via `ffmpeg` at the midpoint of the clip and hashes it with `imagehash.phash` for near-duplicate
-  matching.
-- `duplicates.py` — two-pass grouping: exact SHA-256 matches first, then a duration-tolerance +
-  perceptual-hash-distance clustering pass over whatever wasn't already claimed by pass one.
-  `pick_reference_name` chooses the longest filename stem in a group as the basis for renaming
-  (used as the heuristic for "the file with more information in the title").
-- `short_videos.py` — filters the (non-duplicate) remaining videos by
+- `config.py` — carrega e valida o `config.yaml` em um dataclass `Config`. Todos os parâmetros
+  ajustáveis (pasta de origem, nomes das pastas de revisão, limite de distância de hash,
+  tolerância de duração, limite de vídeo curto) vivem aqui; novos parâmetros devem começar por
+  aqui.
+- `scanner.py` — descoberta recursiva de arquivos; sempre exclui os nomes de pasta de revisão
+  configurados, para que reexecuções não reescaneiem o que já foi organizado.
+- `metadata.py` — encapsula o `ffprobe` (saída em JSON) para obter duração/resolução; é o único
+  ponto onde a ausência do ffmpeg é detectada e sinalizada (`FFProbeNotFoundError`).
+- `hashing.py` — `sha256_file` para comparação de duplicados exatos; `perceptual_hash` extrai um
+  frame via `ffmpeg` no meio do clipe e o compara com `imagehash.phash` para prováveis
+  duplicados.
+- `duplicates.py` — agrupamento em duas passagens: primeiro os SHA-256 exatos, depois uma
+  passagem de agrupamento por tolerância de duração + distância de hash perceptual sobre o que
+  não foi reivindicado na primeira passagem. `pick_reference_name` escolhe o nome de arquivo mais
+  longo do grupo como base para a renomeação (usado como heurística para "o arquivo com mais
+  informação no título").
+- `short_videos.py` — filtra os vídeos restantes (não duplicados) por
   `duration_seconds < max_duration_seconds`.
-- `mover.py` — the only module that touches the filesystem for moves. `MovePlan` is a pure data
-  object; `show_plan`/`confirm` are the human-in-the-loop gate; `execute_moves` uses `shutil.move`
-  (works across drives) and `unique_destination` avoids clobbering existing files in the review
-  folder.
+- `mover.py` — o único módulo que toca o sistema de arquivos para mover arquivos. `MovePlan` é um
+  objeto de dados puro; `show_plan`/`confirm` são o ponto de confirmação humana;
+  `execute_moves` usa `shutil.move` (funciona entre drives) e `unique_destination` evita
+  sobrescrever arquivos existentes na pasta de revisão.
 
-Key invariant: nothing in `duplicates.py` or `short_videos.py` ever moves a file directly — they
-only return data (`DuplicateGroup`, `Path` lists). `cli.py` turns that into `MovePlan`s, and
-`mover.py` is the sole place `shutil.move` is called. Keep new detection rules following that same
-"detect -> plan -> confirm -> execute" separation.
+Invariante importante: nada em `duplicates.py` ou `short_videos.py` move um arquivo diretamente —
+eles só retornam dados (`DuplicateGroup`, listas de `Path`). O `cli.py` transforma isso em
+`MovePlan`s, e o `mover.py` é o único lugar onde `shutil.move` é chamado. Ao adicionar novas
+regras de detecção, mantenha essa mesma separação "detectar -> planejar -> confirmar -> executar".

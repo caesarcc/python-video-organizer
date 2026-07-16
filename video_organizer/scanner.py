@@ -1,15 +1,15 @@
-"""Recursive discovery of video files under a root folder."""
+"""Busca recursiva de arquivos de vídeo a partir de uma pasta raiz."""
 from __future__ import annotations
 
 from pathlib import Path
 
 
 def find_videos(root: Path, extensions: list[str], skip_dirs: set[str] | None = None) -> list[Path]:
-    """Recursively find video files under root.
+    """Busca vídeos recursivamente a partir de root.
 
-    skip_dirs is matched against directory *names* anywhere in the relative path, so the
-    configured review folders (which live inside source_folder) are never re-scanned on
-    subsequent runs.
+    skip_dirs é comparado com os *nomes* de pasta em qualquer ponto do caminho relativo, para que
+    as pastas de revisão configuradas (que ficam dentro de source_folder) nunca sejam
+    reescaneadas nas próximas execuções.
     """
     skip_dirs = skip_dirs or set()
     exts = {e.lower() for e in extensions}

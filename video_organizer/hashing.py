@@ -1,8 +1,8 @@
-"""File hashing helpers used for duplicate detection.
+"""Funções de hash usadas na detecção de duplicados.
 
-sha256_file() catches byte-identical copies. perceptual_hash() catches "probable" duplicates:
-re-encodes, re-muxes, or renamed copies of the same footage that will never share a byte hash but
-look the same when you sample a frame.
+sha256_file() identifica cópias idênticas byte a byte. perceptual_hash() identifica duplicados
+"prováveis": cópias recodificadas, remuxadas ou renomeadas da mesma gravação, que nunca vão
+compartilhar o mesmo hash de bytes, mas parecem iguais ao comparar um frame amostrado.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def sha256_file(path: Path) -> str:
 
 
 def perceptual_hash(path: Path, duration_seconds: float, at_fraction: float = 0.5) -> Optional[imagehash.ImageHash]:
-    """Extract a representative frame and return its perceptual hash, or None if unavailable."""
+    """Extrai um frame representativo e retorna seu hash perceptual, ou None se indisponível."""
     if FFMPEG is None or duration_seconds <= 0:
         return None
 

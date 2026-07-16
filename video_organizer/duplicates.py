@@ -1,60 +1,66 @@
-"""Duplicate and probable-duplicate detection.
+"""Detecção de duplicados e prováveis duplicados.
 
-Two passes, run in order so a video is never claimed by both:
-  1. Exact duplicates - grouped by SHA-256 of the file content.
-  2. Probable duplicates - among whatever is left, cluster by "duration within tolerance AND
-     perceptual hash of a sampled frame within threshold".
+Duas passagens, executadas em ordem para que um vídeo nunca seja reivindicado pelas duas:
+  1. Duplicados exatos - agrupados pelo SHA-256 do conteúdo do arquivo.
+  2. Prováveis duplicados - entre o que sobrou, agrupa por "duração dentro da tolerância E
+     hash perceptual de um frame amostrado dentro do limite".
 
-This module never touches the filesystem beyond reading files to hash them - it only returns
-DuplicateGroup data. Turning that into moves is cli.py's job, and mover.py is the only place a
-move actually happens.
+Este módulo nunca toca o sistema de arquivos além de ler os arquivos para gerar os hashes - ele
+só retorna dados de DuplicateGroup. Transformar isso em movimentações é responsabilidade do
+cli.py, e mover.py é o único lugar onde uma movimentação de fato acontece.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, TypeVar
+
+from rich.console import Console
 
 from .config import DuplicatesConfig
 from .hashing import perceptual_hash, sha256_file
 from .metadata import VideoMetadata, probe
 
-T = TypeVar("T")
+console = Console()
 
 
 @dataclass
 class DuplicateGroup:
     videos: list[VideoMetadata]
-    reason: str  # human-readable explanation shown in the review table
-
-
-def _group_by_key(items: list[T], key_fn: Callable[[T], object]) -> list[list[T]]:
-    groups: dict[object, list[T]] = {}
-    for item in items:
-        groups.setdefault(key_fn(item), []).append(item)
-    return [g for g in groups.values() if len(g) > 1]
+    reason: str  # explicação legível exibida na tabela de revisão
 
 
 def find_duplicate_groups(paths: list[Path], config: DuplicatesConfig) -> list[DuplicateGroup]:
+    total = len(paths)
     metadatas: list[VideoMetadata] = []
-    for p in paths:
+    for i, p in enumerate(paths, start=1):
+        console.print(f"[dim]({i}/{total})[/dim] Reading metadata: {p.name}")
         try:
             metadatas.append(probe(p))
         except Exception:
-            # A file ffprobe can't read just won't be compared against anything.
+            # Um arquivo que o ffprobe não consegue ler simplesmente não será comparado com nada.
+            console.print(f"[yellow]  skipped (unreadable metadata): {p.name}[/yellow]")
             continue
 
     groups: list[DuplicateGroup] = []
     claimed: set[Path] = set()
 
-    # Pass 1: identical file content.
-    for group in _group_by_key(metadatas, lambda v: sha256_file(v.path)):
-        groups.append(DuplicateGroup(videos=group, reason="identical file content"))
-        claimed.update(v.path for v in group)
+    # Passagem 1: conteúdo de arquivo idêntico.
+    hashes: dict[str, list[VideoMetadata]] = {}
+    for i, v in enumerate(metadatas, start=1):
+        console.print(f"[dim]({i}/{len(metadatas)})[/dim] Hashing (SHA-256): {v.path.name}")
+        hashes.setdefault(sha256_file(v.path), []).append(v)
 
-    # Pass 2: similar duration + matching sampled frame, among what's left.
+    for group in hashes.values():
+        if len(group) > 1:
+            groups.append(DuplicateGroup(videos=group, reason="identical file content"))
+            claimed.update(v.path for v in group)
+
+    # Passagem 2: duração parecida + frame amostrado correspondente, entre o que sobrou.
     remaining = [v for v in metadatas if v.path not in claimed]
-    hashed = [(v, perceptual_hash(v.path, v.duration_seconds)) for v in remaining]
+    hashed = []
+    for i, v in enumerate(remaining, start=1):
+        console.print(f"[dim]({i}/{len(remaining)})[/dim] Sampling frame for perceptual hash: {v.path.name}")
+        hashed.append((v, perceptual_hash(v.path, v.duration_seconds)))
 
     used: set[Path] = set()
     for i, (v1, h1) in enumerate(hashed):
@@ -76,7 +82,8 @@ def find_duplicate_groups(paths: list[Path], config: DuplicatesConfig) -> list[D
 
 
 def pick_reference_name(group: DuplicateGroup) -> str:
-    """Pick the filename stem believed to carry the most information (the longest one), used as
-    the shared base name when renaming a group's copies for side-by-side review."""
+    """Escolhe o nome de arquivo (sem extensão) que parece carregar mais informação (o mais
+    longo), usado como nome base compartilhado ao renomear as cópias do grupo para revisão lado
+    a lado."""
     best = max(group.videos, key=lambda v: len(v.path.stem))
     return best.path.stem

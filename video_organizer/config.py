@@ -1,4 +1,4 @@
-"""Load and validate the video-organizer configuration file."""
+"""Carrega e valida o arquivo de configuração do video-organizer."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,7 +12,7 @@ DEFAULT_VIDEO_EXTENSIONS = [
 
 
 class ConfigError(RuntimeError):
-    """Raised when config.yaml is missing or invalid."""
+    """Lançada quando o config.yaml está ausente ou inválido."""
 
 
 @dataclass
@@ -33,6 +33,7 @@ class ShortVideosConfig:
 @dataclass
 class Config:
     source_folder: Path
+    source_folder_from_default: bool = False
     video_extensions: list[str] = field(default_factory=lambda: list(DEFAULT_VIDEO_EXTENSIONS))
     duplicates: DuplicatesConfig = field(default_factory=DuplicatesConfig)
     short_videos: ShortVideosConfig = field(default_factory=ShortVideosConfig)
@@ -57,10 +58,15 @@ def load_config(path: Path) -> Config:
     with path.open("r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
 
-    if not raw.get("source_folder"):
-        raise ConfigError("config.yaml must set 'source_folder'.")
+    raw_source_folder = raw.get("source_folder")
+    if raw_source_folder:
+        source_folder = Path(raw_source_folder).expanduser()
+        source_folder_from_default = False
+    else:
+        # source_folder é opcional: se ausente, usa a pasta atual de onde o comando é executado.
+        source_folder = Path.cwd()
+        source_folder_from_default = True
 
-    source_folder = Path(raw["source_folder"]).expanduser()
     if not source_folder.is_dir():
         raise ConfigError(f"source_folder does not exist or is not a directory: {source_folder}")
 
@@ -81,6 +87,7 @@ def load_config(path: Path) -> Config:
 
     return Config(
         source_folder=source_folder,
+        source_folder_from_default=source_folder_from_default,
         video_extensions=[e.lower() for e in raw.get("video_extensions", DEFAULT_VIDEO_EXTENSIONS)],
         duplicates=duplicates,
         short_videos=short_videos,
