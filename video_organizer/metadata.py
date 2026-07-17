@@ -21,6 +21,7 @@ class VideoMetadata:
     duration_seconds: float
     width: int
     height: int
+    created_at: float
 
 
 def probe(path: Path) -> VideoMetadata:
@@ -43,11 +44,15 @@ def probe(path: Path) -> VideoMetadata:
 
     stream = (data.get("streams") or [{}])[0]
     fmt = data.get("format") or {}
+    stat = path.stat()
 
     return VideoMetadata(
         path=path,
-        size_bytes=path.stat().st_size,
+        size_bytes=stat.st_size,
         duration_seconds=float(fmt.get("duration", 0.0) or 0.0),
         width=int(stream.get("width", 0) or 0),
         height=int(stream.get("height", 0) or 0),
+        # No Windows, st_ctime é a data de criação do arquivo (em outros sistemas seria a data
+        # de alteração de metadados) - este projeto assume ambiente Windows.
+        created_at=stat.st_ctime,
     )

@@ -4,11 +4,16 @@ Varre uma biblioteca de vídeos (recursivamente, a partir de uma pasta definida 
 e ajuda a organizá-la em duas etapas:
 
 1. **Detecção de duplicados** — agrupa vídeos que são idênticos byte a byte ou *provavelmente*
-   o mesmo clipe (duração parecida + um frame amostrado correspondente), move cada grupo para
-   uma pasta de revisão e renomeia as cópias com base no nome de arquivo que parece mais
-   descritivo.
+   o mesmo clipe (duração parecida + um frame amostrado correspondente), e move cada grupo para
+   uma pasta de revisão nomeada com base no arquivo que parece mais descritivo — os arquivos em
+   si mantêm seus nomes originais, só a pasta é que leva esse nome de referência. Cada pasta de
+   grupo também recebe um `duplicate_report.txt` com a pasta de origem completa de cada arquivo
+   e o motivo da similaridade identificada.
 2. **Detecção de vídeos curtos** — entre o que sobrou, encontra tudo que estiver abaixo de uma
-   duração configurada e move para uma pasta de revisão separada.
+   duração configurada e move para uma pasta de revisão separada. Essa pasta também recebe um
+   `short_videos_report.csv` com uma linha por arquivo: `nome_arquivo`,
+   `caminho_completo_origem`, `data_criacao_arquivo`, `tempo_video` (segundos) e
+   `tamanho_arquivo` (bytes).
 
 Toda movimentação é exibida como uma tabela e exige confirmação interativa antes de qualquer
 alteração no disco (a menos que `--yes` ou `--dry-run` seja usado). Os arquivos são sempre

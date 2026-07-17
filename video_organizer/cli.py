@@ -8,13 +8,17 @@ Pipeline:
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import sys
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from .config import Config, ConfigError, load_config
 from .duplicates import DuplicateGroup, find_duplicate_groups, pick_reference_name
-from .metadata import FFProbeNotFoundError
-from .mover import MovePlan, confirm, console, execute_moves, show_plan, unique_destination
+from .metadata import FFProbeNotFoundError, VideoMetadata
+from .mover import MovePlan, confirm, console, execute_moves, show_plan, unique_destination, write_report
 from .scanner import find_videos
 from .short_videos import find_short_videos
 
@@ -27,26 +31,63 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def build_duplicate_plans(config: Config, groups: list[DuplicateGroup]) -> list[MovePlan]:
+@dataclass
+class DuplicateReport:
+    group_dir: Path
+    content: str
+
+
+def build_duplicate_report(group: DuplicateGroup) -> str:
+    lines = [f"Duplicate group - {group.reason}", ""]
+    for video in group.videos:
+        lines.append(f"Original location: {video.path.resolve()}")
+        lines.append(
+            f"  duration: {video.duration_seconds:.2f}s, "
+            f"resolution: {video.width}x{video.height}, "
+            f"size: {video.size_bytes} bytes"
+        )
+        lines.append("")
+    return "\n".join(lines)
+
+
+def build_duplicate_plans(config: Config, groups: list[DuplicateGroup]) -> tuple[list[MovePlan], list[DuplicateReport]]:
     plans: list[MovePlan] = []
+    reports: list[DuplicateReport] = []
     review_root = config.duplicates_review_path
+    reserved: set[Path] = set()
     for i, group in enumerate(groups, start=1):
         base_name = pick_reference_name(group)
         group_dir = review_root / f"{i:03d}_{base_name}"[:150]
-        for j, video in enumerate(group.videos, start=1):
-            dest_name = f"{base_name}_{j}{video.path.suffix}"
-            destination = unique_destination(group_dir / dest_name)
+        for video in group.videos:
+            destination = unique_destination(group_dir / video.path.name, reserved)
             plans.append(MovePlan(source=video.path, destination=destination, reason=group.reason))
-    return plans
+        reports.append(DuplicateReport(group_dir=group_dir, content=build_duplicate_report(group)))
+    return plans, reports
 
 
-def build_short_video_plans(config: Config, paths: list[Path]) -> list[MovePlan]:
+def build_short_video_plans(config: Config, videos: list[VideoMetadata]) -> list[MovePlan]:
     review_root = config.short_videos_review_path
     plans = []
-    for p in paths:
-        destination = unique_destination(review_root / p.name)
-        plans.append(MovePlan(source=p, destination=destination, reason="shorter than configured minimum"))
+    reserved: set[Path] = set()
+    for video in videos:
+        destination = unique_destination(review_root / video.path.name, reserved)
+        plans.append(MovePlan(source=video.path, destination=destination, reason="shorter than configured minimum"))
     return plans
+
+
+def build_short_videos_report(videos: list[VideoMetadata]) -> str:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["nome_arquivo", "caminho_completo_origem", "data_criacao_arquivo", "tempo_video", "tamanho_arquivo"])
+    for video in videos:
+        writer.writerow([
+            video.path.name,
+            str(video.path.resolve()),
+            datetime.fromtimestamp(video.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+            f"{video.duration_seconds:.2f}",
+            video.size_bytes,
+        ])
+    return buffer.getvalue()
 
 
 def confirm_target(config: Config) -> bool:
@@ -94,12 +135,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         if groups:
-            plans = build_duplicate_plans(config, groups)
+            plans, reports = build_duplicate_plans(config, groups)
             show_plan(plans, f"Step 1: {len(groups)} duplicate group(s) found")
             if args.dry_run:
                 print("(dry run) Skipping move.")
             elif confirm("Move these files into the duplicates review folder?", assume_yes=args.yes):
                 execute_moves(plans)
+                for report in reports:
+                    write_report(report.group_dir / "duplicate_report.txt", report.content)
                 moved_in_step_one.update(p.source for p in plans)
             else:
                 print("Skipped.")
@@ -108,17 +151,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if config.short_videos.enabled:
         remaining = [v for v in videos if v not in moved_in_step_one]
-        short_paths = find_short_videos(remaining, config.short_videos)
-        if short_paths:
-            plans = build_short_video_plans(config, short_paths)
+        short_videos = find_short_videos(remaining, config.short_videos)
+        if short_videos:
+            plans = build_short_video_plans(config, short_videos)
             show_plan(
                 plans,
-                f"Step 2: {len(short_paths)} video(s) shorter than {config.short_videos.max_duration_seconds}s",
+                f"Step 2: {len(short_videos)} video(s) shorter than {config.short_videos.max_duration_seconds}s",
             )
             if args.dry_run:
                 print("(dry run) Skipping move.")
             elif confirm("Move these files into the short-videos folder?", assume_yes=args.yes):
                 execute_moves(plans)
+                write_report(
+                    config.short_videos_review_path / "short_videos_report.csv",
+                    build_short_videos_report(short_videos),
+                )
             else:
                 print("Skipped.")
         else:

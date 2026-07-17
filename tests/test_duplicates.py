@@ -7,7 +7,9 @@ from video_organizer.metadata import VideoMetadata
 
 
 def _meta(path, duration=10.0):
-    return VideoMetadata(path=Path(path), size_bytes=100, duration_seconds=duration, width=1920, height=1080)
+    return VideoMetadata(
+        path=Path(path), size_bytes=100, duration_seconds=duration, width=1920, height=1080, created_at=1_700_000_000.0
+    )
 
 
 def test_pick_reference_name_prefers_longer_stem():
