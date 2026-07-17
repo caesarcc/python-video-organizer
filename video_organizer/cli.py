@@ -77,7 +77,11 @@ def build_short_video_plans(config: Config, videos: list[VideoMetadata]) -> list
 
 def build_short_videos_report(videos: list[VideoMetadata]) -> str:
     buffer = io.StringIO()
-    writer = csv.writer(buffer)
+    # lineterminator="\n": o csv.writer usa "\r\n" por padrão, e como o conteúdo é gravado em
+    # disco depois via write_text (modo texto, que já traduz "\n" para o separador do sistema),
+    # deixar o "\r\n" do csv passar por essa tradução de novo resultava em "\r\r\n" - uma linha
+    # em branco extra a cada linha ao abrir no Excel/Notepad.
+    writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(["nome_arquivo", "caminho_completo_origem", "data_criacao_arquivo", "tempo_video", "tamanho_arquivo"])
     for video in videos:
         writer.writerow([
